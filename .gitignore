@@ -1,0 +1,43 @@
+# --- Python/Environment - Generated build artifacts ---
+__pycache__/
+*.pyc
+.env/
+dist/
+build/
+*.egg-info/
+
+# Virtual environment
+.venv/
+venv/
+
+# --- OS / IDE files ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.ipynb_checkpoints/
+
+# Environment variables — NEVER commit
+.env
+.env.local
+.env.*.local
+
+# --- Sensitive Data ---
+*.pem
+keys/
+secrets.json
+
+# --- Database ---
+chroma_db/
+
+# --- ML Artifacts/Data ---
+data/
+models/
+checkpoints/
+*.pth
+*.safetensors
+*.bin
+*.parquet
+*.csv
+
+
