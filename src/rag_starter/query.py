@@ -1,12 +1,21 @@
 import sys
 import chromadb
+from chromadb import Collection
 from anthropic import Anthropic
 from anthropic import APIError
 from dotenv import load_dotenv
 
 load_dotenv()   
 
-def retrieve_chunks(collection, q, n_results=5):
+def get_collection():
+    client = chromadb.PersistentClient(path="./chroma_db")
+    return client.get_collection(name="anthropic_docs")
+
+def retrieve_chunks(
+        collection: Collection,
+        q: str,
+        n_results: int = 5
+    ) -> list[dict[str, str]]:
 
     results = collection.query(
         query_texts=[q],
@@ -22,7 +31,7 @@ def retrieve_chunks(collection, q, n_results=5):
 
     return(chunks)
 
-def build_prompt(user_question, chunks):
+def build_prompt(user_question: str, chunks: list[dict[str, str]]) -> str:
     system_prompt = "You are a helpful assistant answering questions about Anthropic's documentation. Answer ONLY from the provided context. If the context doesn't contain the answer, say 'I don't know based on the provided documentation.'"
 
     context = "Context:\n"
@@ -33,7 +42,7 @@ def build_prompt(user_question, chunks):
 
     return prompt
 
-def generate_answer(prompt):
+def generate_answer(prompt: str) -> str:
     client = Anthropic()          
     ########## 1. Add a comment in src/query.py where you build the prompt, above the client.messages.create() or stream() call:
     # COST NOTE: Anthropic prompt caching (cache_control breakpoints) will be
@@ -57,12 +66,11 @@ def generate_answer(prompt):
     except Exception as e:
         return(f"Unexpected error: {e}")
 
-def main(collection, user_question):
+def main(collection: Collection, user_question: str) -> dict[str, str | list[str]]:
     chunks = retrieve_chunks(collection, user_question) 
     prompt = build_prompt(user_question, chunks)
     answer = generate_answer(prompt) 
 
-    sources = [item['source'] for item in chunks]
     sources = list(dict.fromkeys([item['source'] for item in chunks]))
     response = {"answer": answer, "sources": sources}
 
@@ -71,17 +79,12 @@ def main(collection, user_question):
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         user_question = " ".join(sys.argv[1:])
-       
-        client = chromadb.PersistentClient(path="./chroma_db")
-        collection = client.get_collection(name="anthropic_docs")
 
+        collection = get_collection()
         result = main(collection, user_question)
-    
+
         print("\nAnswer:", result["answer"])
         print("\nSources:", result["sources"])
 
     else:
         print("Error: No string provided.")
-
-
-
