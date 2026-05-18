@@ -160,16 +160,25 @@ Dependencies are listed in `requirements.txt`. See [Tech stack](#tech-stack) bel
 
     rag-starter/
     ├── src/
-    │   ├── ingest.py        # Load, chunk, embed, store
-    │   └── query.py         # Retrieve, generate, return grounded answer
-    ├── data/                # Source documents (markdown/text)
-    ├── chroma_db/           # Persistent vector database (gitignored)
-    ├── assets/
-    ├── .env.example         # Environment variable template
+    │   └── rag_starter/
+    │       ├── __init__.py
+    │       ├── ingest.py         # Load, chunk, embed, store
+    │       └── query.py          # Retrieve, generate, return grounded answer
+    ├── evals/
+    │   ├── dataset.json          # 30 golden Q/A pairs
+    │   ├── scorer.py             # LLM-as-judge scoring logic
+    │   ├── runner.py             # Orchestrates full eval run
+    │   └── results/
+    │       └── results.json      # Eval run output
+    ├── tests/
+    ├── data/                     # Source documents (markdown/text) 
+    ├── chroma_db/                # Persistent vector database (gitignored)
+    ├── pyproject.toml
+    ├── .env.example              # Environment variable template
     ├── .gitignore
     ├── .python-version
     ├── requirements.txt
-    └── README.md
+    └── README.md                 
 
 ---
 
