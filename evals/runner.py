@@ -18,13 +18,12 @@ def run_eval(
 
     results = []
     
-    # for each item in dataset:
-    #for item in dataset[26:27]:
+    #for item in dataset[26:27]:    # use for test to save on tokens
     for item in dataset:
         # call query.main() to get answer + chunks
         generated_result = query.main(collection, item["question"])
 
-        # extract text from chunks (the fix we discussed)
+        # extract text from chunks
         chunks_text = [c["text"] for c in generated_result["chunks"]]
 
         # call scorer.score_faithfulness() with question, chunks_text, answer, expected_answer
@@ -58,9 +57,9 @@ def run_eval(
 
 def write_results(results: list[dict], output_path: str | Path) -> None:
     output_path = Path(output_path)
-    # Make directory if needed
+    # make directory if needed
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    # Write JSON (indent=2 keeps it human-readable)
+    # write JSON (indent=2 keeps it human-readable)
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
 

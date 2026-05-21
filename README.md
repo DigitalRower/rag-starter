@@ -60,11 +60,47 @@ For production, measure against your actual usage patterns before committing to 
 - Embedding quality depends on the corpus — retrieval is only as good as the embeddings. For domain-specific jargon (medical, legal, technical), consider fine-tuned or domain-specific embedding models in production.
 - Chunk size and overlap are fixed — no adaptive chunking based on document structure
 - No query expansion or reranking — retrieved chunks are returned in embedding similarity order without additional refinement
-- No eval harness in W4 — retrieval quality is tested manually. Automated eval harness (precision, recall, hallucination rate) added in W5E.
+- Retrieval is the primary weakness — precision@3 scores 0.30 on edge cases and 0.00 on adversarial queries. Generation is grounded when chunks are found (faithfulness 4.95/5.00 overall), but the pipeline does not reliably retrieve the right chunks for ambiguous or adversarial inputs. Retrieval quality will be the focus of improvement in W9–W12.
 - Persistent collection stored locally — not suitable for multi-user or distributed scenarios without additional infrastructure
 - **Prompt caching not yet implemented** — Anthropic prompt caching will be
   applied at production hardening (W13) once a token-cost baseline is established.
 
+
+---
+
+## Eval results (W5E)
+
+Automated eval harness built in W5E using LLM-as-judge scoring (Claude Haiku, temperature=0, JSON output). 40 test cases across four categories. Full dataset: `evals/dataset.json`.
+
+### Metrics
+
+- **Faithfulness (1–5):** Does the answer accurately reflect the retrieved chunks? Penalizes hallucination.
+- **Relevance (1–5):** Does the answer address the question? Penalizes responses where chunks were retrieved but didn't produce a useful answer.
+- **Precision@3 (0 or 1):** Do the top-3 retrieved chunks contain sufficient information to answer the question?
+
+### Results
+
+| Category | Avg Faithfulness | Avg Relevance | Precision@3 | Count |
+|---|---|---|---|---|
+| happy_path | 5.00 | 3.69 | 0.75 | 16 |
+| edge_case | 4.80 | 2.90 | 0.30 | 10 |
+| adversarial | 5.00 | 5.00 | 0.00 | 4 |
+| bias_paired | 5.00 | 3.40 | 0.60 | 10 |
+| **OVERALL** | **4.95** | **3.55** | **0.53** | **40** |
+
+### Interpretation
+
+Generation is strong — faithfulness is near-perfect across all categories (4.95/5.00), meaning Claude does not hallucinate when chunks are retrieved. The weakness is retrieval: precision@3 drops to 0.30 on edge cases and 0.00 on adversarial queries, which directly explains the lower relevance scores in those categories. When the right chunks aren't retrieved, no generation quality can compensate.
+
+The adversarial category (precision@3=0.00, relevance=5.00) shows an interesting pattern: the four adversarial cases scored perfectly on relevance because the system correctly returned "I don't know based on the provided context" — the grounding constraint worked as intended, but no chunks were retrieved.
+
+The gap to close in W9–W12 is retrieval quality, not generation quality.
+
+### Bias check
+
+5 paired test cases were added to the eval dataset (`bias_paired` category) where the same factual question was phrased with different demographic or organizational framing (e.g., US vs. EU context, personal hobby vs. commercial production). Faithfulness=5.00 and precision@3=0.60 were consistent across all 10 cases.
+
+Minor relevance variation was observed on 2 of 5 pairs: pair 032 (US vs. EU framing) scored 5 vs. 4 relevance, and pair 033 (personal hobby vs. commercial production) scored 5 vs. 4 relevance. The remaining 3 pairs showed no variation. The likely cause is corpus coverage — EU regulatory and production deployment content is underrepresented in the corpus relative to US and hobby-project content. No model bias was identified; the variation tracks directly to what the corpus contains.
 
 ---
 
@@ -165,7 +201,7 @@ Dependencies are listed in `requirements.txt`. See [Tech stack](#tech-stack) bel
     │       ├── ingest.py         # Load, chunk, embed, store
     │       └── query.py          # Retrieve, generate, return grounded answer
     ├── evals/
-    │   ├── dataset.json          # 30 golden Q/A pairs
+    │   ├── dataset.json          # 40 golden Q/A pairs (happy_path, edge_case, adversarial, bias_paired)
     │   ├── scorer.py             # LLM-as-judge scoring logic
     │   ├── runner.py             # Orchestrates full eval run
     │   └── results/
@@ -281,7 +317,7 @@ Common issues and solutions:
 
 ## Testing grounding
 
-Before moving to W5E (eval harness), manually test grounding with these scenarios:
+Use these scenarios to verify grounding behavior manually, or as a sanity check after modifying the pipeline:
 
 **Test 1 — Answerable query:**
 
@@ -306,8 +342,8 @@ Run the same query through `src/query.py` (with retrieval) and compare to Claude
 
 ## Next steps
 
-- **W5E:** Build eval harness with 30+ golden Q/A pairs and multi-dimensional scoring (precision, recall, hallucination rate)
-- **W9:** Adapt ingestion and retrieval logic for Project 1 (Docs Copilot) — same architecture, different corpus
+- **W6E:** Add Langfuse observability — structured logging, request tracing, cost tracking, and latency monitoring (p50/p95)
+- **W9:** Adapt ingestion and retrieval logic for Project 1 (Docs Copilot) — same architecture, different corpus. Retrieval quality (precision@3) is the primary gap to address at this stage.
 - **W13:** Add prompt caching to reduce redundant token cost on repeated queries
 - **W28+:** Benchmark against OpenAI's long-context APIs to decide when RAG is overkill
 

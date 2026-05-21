@@ -91,7 +91,7 @@ def score_answer_relevance(
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=256,
-        temperature=0, # deterministic scoring
+        temperature=0,
         system=(
             "You are an evaluator. Given the following question, generated answer and expected answer, "
             "score the answer for answer relevance on a scale of 1–5. "
