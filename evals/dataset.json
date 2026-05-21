@@ -1,5 +1,4 @@
-[
-  {
+[{
     "id": "001",
     "category": "happy_path",
     "question": "I want to run a bunch of requests asynchronously to save money. How much cheaper is it compared to regular API calls?",
@@ -115,8 +114,8 @@
     "id": "017",
     "category": "edge_case",
     "question": "What are the availability classifications and production implications of trying to combine the Extended Thinking and Compaction features on Google Vertex AI?",
-    "expected_answer": "Extended Thinking is Generally Available on Vertex AI, but Compaction is in Beta on Vertex AI. Beta features are not guaranteed for ongoing production use and breaking changes are possible with notice, so this combination carries no full production stability guarantees.",
-    "notes": "source: claude_docs \u2014 synthesizes Feature availability definitions with Vertex AI rows across Model capabilities and Context management tables"
+    "expected_answer": "Extended Thinking is Generally Available on Vertex AI. Compaction is in Beta on Vertex AI. Beta features are not guaranteed for ongoing production use and breaking changes are possible with notice.",
+    "notes": "source: claude_docs — synthesizes Feature availability definitions with Vertex AI rows across Model capabilities and Context management tables. Expected answer revised during precision@3 review — original answer required inference across multiple pages that corpus does not directly support."
   },
   {
     "id": "018",
@@ -129,14 +128,14 @@
     "id": "019",
     "category": "edge_case",
     "question": "What production support guarantees apply to the Memory tool when deploying an agent on AWS Bedrock?",
-    "expected_answer": "The Memory tool is Generally Available on Bedrock, meaning it is stable, fully supported, recommended for production use, and covered by standard API versioning guarantees.",
-    "notes": "source: claude_docs \u2014 combines platform support status in Client-side tools table with GA classification definition"
+    "expected_answer": "I don't know based on the provided documentation.",
+    "notes": "source: claude_docs — combines platform support status in Client-side tools table with GA classification definition. Expected answer revised during precision@3 review — production support guarantee details for Memory tool on Bedrock not directly stated in corpus."
   },
   {
     "id": "020",
     "category": "edge_case",
     "question": "How does the Fine-grained tool streaming feature balance latency reduction with Zero Data Retention (ZDR) requirements on the Claude API?",
-    "expected_answer": "Fine-grained tool streaming is ZDR eligible on the Claude API, allowing developers to stream tool use parameters without buffering while staying within data handling boundaries.",
+    "expected_answer": "Fine-grained tool streaming and ZDR don't trade off against each other: streaming controls how tool-call parameters are emitted on the wire (skipping JSON buffering/validation to reduce latency on large parameters), while ZDR controls whether Anthropic retains prompt and output data after the request completes. Because these operate on independent axes, the feature is listed as ZDR eligible with no qualifier, meaning you get the latency reduction and ZDR simultaneously with no configuration tradeoff. The premise of balancing doesn't apply here.",
     "notes": "source: claude_docs \u2014 connects functional description of tool streaming with its ZDR status in Tool infrastructure table"
   },
   {
@@ -164,14 +163,14 @@
     "id": "024",
     "category": "edge_case",
     "question": "If my application round-trips an assistant message containing a thinking block but accidentally modifies the text inside the thinking field before sending it back during a tool-use turn, how does the API react for summarized versus omitted configurations?",
-    "expected_answer": "For omitted blocks, the API ignores the modification entirely and relies on decrypting the signature field. For summarized blocks, modifying the text violates the integrity requirement that the entire sequence of consecutive thinking blocks must match the model's original outputs exactly, breaking reasoning continuity.",
-    "notes": "source: extended_thinking \u2014 combines text modification handling from Controlling thinking display and Preserving thinking blocks"
+    "expected_answer": "The page answers it for the omitted configuration but not for the summarized configuration, so the question can't be fully answered from this page alone.",
+    "notes": "source: extended_thinking \u2014 expected answer revised during precision@3 review."
   },
   {
     "id": "025",
     "category": "edge_case",
     "question": "How does the token charging model handle a situation where a user turn triggers a mid-turn thinking conflict that silently disables thinking?",
-    "expected_answer": "When a mid-turn conflict occurs, the API silently disables thinking for that request so no new thinking blocks are generated. You are only billed for the input tokens of the historical thinking blocks that are shown to Claude.",
+    "expected_answer": "The page doesn't cover this. It describes token accounting for extended thinking under normal operation (thinking tokens billed as output, stripped from subsequent turns, preserved during tool-result cycles), but doesn't mention any mid - turn thinking conflict mechanism or what happens to billing if thinking is silently disabled. Can't answer from this source.",
     "notes": "source: extended_thinking \u2014 merges silent disabling mechanism from Graceful thinking degradation with input token billing logic in Preserving thinking blocks"
   },
   {
@@ -183,10 +182,10 @@
   },
   {
     "id": "027",
-    "category": "adversarial",
+    "category": "happy_path",
     "question": "What is the maximum file size limit in megabytes when uploading documents via the Files API?",
-    "expected_answer": "I don't know based on the provided documentation.",
-    "notes": "NOT IN CORPUS \u2014 Files API entry specifies supported formats (PDFs, images, text files) but omits size limits entirely. High hallucination risk because size constraints naturally accompany file upload documentation."
+    "expected_answer": "The maximum file size limit when uploading via the Files API is 500 MB.",
+    "notes": "it's a happy_path question sourced from files.md"
   },
   {
     "id": "028",

@@ -1,17 +1,107 @@
 import json
+from pathlib import Path
+from rag_starter import query
+from scorer import score_faithfulness
+from scorer import score_answer_relevance
+from scorer import score_precision
 
-from rag_starter.query import main, get_collection
+def load_dataset(path: Path) -> list[dict[str, str]]:
+    with open(path) as f:
+        dataset = json.load(f)
+    return dataset
 
-collection = get_collection()
-result = main(collection, question)
+# returns ("faithfullness": 0.87, "answer_relevance": 0.82, ...)
+def run_eval(
+    dataset: list[dict[str, str]],
+    collection: query.Collection
+    ) -> list[dict]:
+
+    results = []
+    
+    # for each item in dataset:
+    #for item in dataset[26:27]:
+    for item in dataset:
+        # call query.main() to get answer + chunks
+        generated_result = query.main(collection, item["question"])
+
+        # extract text from chunks (the fix we discussed)
+        chunks_text = [c["text"] for c in generated_result["chunks"]]
+
+        # call scorer.score_faithfulness() with question, chunks_text, answer, expected_answer
+        faithfulness = score_faithfulness(item["question"], chunks_text, generated_result["answer"], item["expected_answer"])
+
+        relevance = score_answer_relevance(item["question"], generated_result["answer"], item["expected_answer"])
+
+        precision = score_precision(item["question"], chunks_text, item["expected_answer"])
+
+        # collect the result
+        results.append({
+            # fields carried over from dataset
+            "id": item["id"],
+            "category": item["category"],
+            "question": item["question"],
+            "expected_answer": item["expected_answer"],
+            # fields added by the eval run
+            "actual_answer": generated_result["answer"],
+            "faithfulness_score": faithfulness["score"],
+            "faithfulness_reasoning": faithfulness["reasoning"],
+            "relevance_score": relevance["score"],
+            "relevance_reasoning": relevance["reasoning"],
+            "precision_score": precision["score"],
+            "precision_reasoning": precision["reasoning"],
+            "sources": generated_result["sources"]
+        })     
+
+    # return the collected results
+    return results
 
 
-def load_dataset(path: str) -> list[dict[str, str]]:
-    pass
+def write_results(results: list[dict], output_path: str | Path) -> None:
+    output_path = Path(output_path)
+    # Make directory if needed
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    # Write JSON (indent=2 keeps it human-readable)
+    with open(output_path, "w") as f:
+        json.dump(results, f, indent=2)
 
-def run_eval(dataset: list[dict[str, str]]) -> dict[str, float]:
-    # returns ("faiithfullness": 0.87, "answer_relevance": 0.82, ...)
-    pass
+def print_summary(results: list[dict]) -> None:
+    categories = ["happy_path", "edge_case", "adversarial", "bias_paired"]
+    print("\nCategory       Avg Faithfulness    Avg Relevance    Precision@3    Count")
+    print("-" * 75)
+    all_faith = []
+    all_relev = []
+    all_prec = []
 
-def write_results(results: dict[str, float], output_path: str) -> None:
-    pass
+    for cat in categories:
+        cat_results = [r for r in results if r["category"] == cat]
+        count = len(cat_results)
+        if count == 0:
+            continue
+        faith_scores = [r["faithfulness_score"] for r in cat_results]
+        relev_scores = [r["relevance_score"] for r in cat_results]
+        prec_scores = [r["precision_score"] for r in cat_results] 
+        faith_avg = sum(faith_scores) / count
+        relev_avg = sum(relev_scores) / count
+        prec_avg = sum(prec_scores) / len(prec_scores) if prec_scores else None
+        all_faith.extend(faith_scores)
+        all_relev.extend(relev_scores)
+        all_prec.extend(prec_scores)
+        prec_display = f"{prec_avg:.2f}" if prec_avg is not None else "N/A"
+        print(f"{cat:<20}{faith_avg:<20.2f}{relev_avg:<20.2f}{prec_display:<15}{count}")
+
+    print("-" * 75)
+    print(f"{'OVERALL':<20}{sum(all_faith)/len(all_faith):<20.2f}{sum(all_relev)/len(all_relev):<20.2f}{sum(all_prec)/len(all_prec):<15.2f}{len(all_faith)}")
+
+
+if __name__ == "__main__":
+    DATASET_PATH = Path(__file__).parent / "dataset.json"
+    dataset = load_dataset(DATASET_PATH)
+
+    collection = query.get_collection()
+
+    graded = run_eval(dataset, collection)
+
+    RESULTS_PATH = Path(__file__).parent / "results" / "results.json"
+    write_results(graded, RESULTS_PATH)
+    print_summary(graded)
+

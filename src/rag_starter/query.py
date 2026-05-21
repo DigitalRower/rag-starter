@@ -14,7 +14,7 @@ def get_collection():
 def retrieve_chunks(
         collection: Collection,
         q: str,
-        n_results: int = 5
+        n_results: int = 3
     ) -> list[dict[str, str]]:
 
     results = collection.query(
@@ -44,7 +44,6 @@ def build_prompt(user_question: str, chunks: list[dict[str, str]]) -> str:
 
 def generate_answer(prompt: str) -> str:
     client = Anthropic()          
-    ########## 1. Add a comment in src/query.py where you build the prompt, above the client.messages.create() or stream() call:
     # COST NOTE: Anthropic prompt caching (cache_control breakpoints) will be
     # applied to this system prompt + retrieved context at W13 once we have
     # a measurable token baseline. At W4 scale, caching adds complexity without
@@ -72,7 +71,7 @@ def main(collection: Collection, user_question: str) -> dict[str, str | list[str
     answer = generate_answer(prompt) 
 
     sources = list(dict.fromkeys([item['source'] for item in chunks]))
-    response = {"answer": answer, "sources": sources}
+    response = {"answer": answer, "sources": sources, "chunks": chunks}
 
     return response
 

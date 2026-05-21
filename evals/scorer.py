@@ -4,11 +4,52 @@ from dotenv import load_dotenv
 
 load_dotenv()   
 
+
+def score_precision(
+        question: str,
+        retrieved_chunks: list[str],
+        expected_answer: str
+) -> dict[str, int | str]:
+    context = "\n\n".join(retrieved_chunks)
+
+    client = Anthropic()
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        temperature=0, # deterministic scoring
+        system=(
+            "You are an evaluator. Given the following context, question, and expected answer, "
+            "score whether at least one of the retrieved chunks contains sufficient information "
+            "to answer the question. "
+            "Score 1 if at least one chunk contains information that could answer the question. "
+            "Score 0 if none of the chunks contain relevant information. "
+            "Sufficient information means the chunks don't need the exact answer word-for-word, "
+            "just enough that a reasonable answer could be generated from them. "
+            "Return JSON only: {\"score\": int, \"reasoning\": str}"
+        ),
+        messages=[
+            {
+                "role": "user",
+                "content": f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer: {expected_answer}",
+            }
+        ],
+    )
+
+    raw = response.content[0].text
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    return json.loads(raw)
+
+
+
 def score_faithfulness(
         question: str,
         retrieved_chunks: list[str], 
         generated_answer: str,
-        expected_answer: str,
+        expected_answer: str
 ) -> dict[str, int | str]:
     context = "\n\n".join(retrieved_chunks)
 
@@ -39,6 +80,43 @@ def score_faithfulness(
             raw = raw[4:]
         raw = raw.strip()
     return json.loads(raw)
+
+
+def score_answer_relevance(
+        question: str,
+        generated_answer: str,
+        expected_answer: str,
+) -> dict[str, int | str]:
+    client = Anthropic()
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        temperature=0, # deterministic scoring
+        system=(
+            "You are an evaluator. Given the following question, generated answer and expected answer, "
+            "score the answer for answer relevance on a scale of 1–5. "
+            "Answer Relevance =  A measure of whether the generated answer actually addresses the question that was asked. "
+            "Score 5 if the answer fully and directly addresses the question, 1 if the answer is off-topic, evasive, or fails to address what was asked. "
+            "Return JSON only: {\"score\": int, \"reasoning\": str}"
+        ),
+        messages=[
+            {
+                "role": "user",
+                "content": f"Question: {question}\n\nGenerated Answer: {generated_answer}\n\nExpected Answer: {expected_answer}",
+ 
+            }
+        ],
+    )
+
+    raw = response.content[0].text
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    return json.loads(raw) 
+
+
 
 
 if __name__ == "__main__":
