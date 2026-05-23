@@ -32,23 +32,23 @@ def retrieve_chunks(collection: Collection, q: str, n_results: int = 3) -> list[
         return []
 
     chunks = []
-    for doc, meta in zip(docs[0], metas[0]):
+    for doc, meta in zip(docs[0], metas[0], strict=False):
         chunks.append({"text": doc, "source": str(meta.get("source", "unknown"))})
 
     return chunks
 
-
 def build_prompt(user_question: str, chunks: list[dict[str, str]]) -> str:
-    system_prompt = "You are a helpful assistant answering questions about Anthropic's documentation. Answer ONLY from the provided context. If the context doesn't contain the answer, say 'I don't know based on the provided documentation.'"
-
+    system_prompt = (
+        "You are a helpful assistant answering questions about Anthropic's documentation. "
+        "Answer ONLY from the provided context. "
+        "If the context doesn't contain the answer, say "
+        "'I don't know based on the provided documentation.'"
+    )
     context = "Context:\n"
     for i, item in enumerate(chunks):
         context += f" [{i}] (from {item['source']}): {item['text']}"
-
     prompt = system_prompt + "\n\n" + context + "\n\nUser question: " + user_question
-
     return prompt
-
 
 def generate_answer(prompt: str) -> str:
     client = Anthropic()
