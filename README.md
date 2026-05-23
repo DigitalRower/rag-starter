@@ -182,6 +182,25 @@ For testing grounding, try:
 
 ---
 
+## Code quality
+
+Type checking and linting run automatically in CI on every push via GitHub Actions.
+
+- **mypy** — enforces type hints on all function signatures and return types. Config in `pyproject.toml` under `[tool.mypy]`. A failing mypy check blocks merge to `main`.
+- **ruff** — lint and format checks. Config in `pyproject.toml` under `[tool.ruff]`. Enforces import order, line length, and common bug patterns. A failing ruff check blocks merge to `main`.
+
+To run locally before pushing:
+
+    mypy src/
+    ruff check src/
+    ruff format --check src/
+
+To auto-fix ruff violations in place:
+
+    ruff format src/
+
+---
+
 ## Requirements
 
 - Python 3.13+
@@ -195,6 +214,9 @@ Dependencies are listed in `requirements.txt`. See [Tech stack](#tech-stack) bel
 ## Project structure
 
     rag-starter/
+    ├── .github/
+    │   └── workflows/
+    │       └── ci.yml            # mypy + ruff checks on every push
     ├── src/
     │   └── rag_starter/
     │       ├── __init__.py
@@ -209,7 +231,7 @@ Dependencies are listed in `requirements.txt`. See [Tech stack](#tech-stack) bel
     ├── tests/
     ├── data/                     # Source documents (markdown/text) 
     ├── chroma_db/                # Persistent vector database (gitignored)
-    ├── pyproject.toml
+    ├── pyproject.toml            # mypy and ruff config
     ├── .env.example              # Environment variable template
     ├── .gitignore
     ├── .python-version
@@ -342,7 +364,7 @@ Run the same query through `src/query.py` (with retrieval) and compare to Claude
 
 ## Next steps
 
-- **W6E:** Add Langfuse observability — structured logging, request tracing, cost tracking, and latency monitoring (p50/p95)
+- **W6E (in progress):** Langfuse observability — structured logging, request tracing, cost tracking, and latency monitoring (p50/p95)
 - **W9:** Adapt ingestion and retrieval logic for Project 1 (Docs Copilot) — same architecture, different corpus. Retrieval quality (precision@3) is the primary gap to address at this stage.
 - **W13:** Add prompt caching to reduce redundant token cost on repeated queries
 - **W28+:** Benchmark against OpenAI's long-context APIs to decide when RAG is overkill

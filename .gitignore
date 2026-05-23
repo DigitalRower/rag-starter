@@ -16,6 +16,7 @@ Thumbs.db
 .vscode/
 .idea/
 .ipynb_checkpoints/
+.claude
 
 # Environment variables — NEVER commit
 .env
