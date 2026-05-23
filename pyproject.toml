@@ -1,0 +1,23 @@
+[project]
+name = "rag-starter"
+version = "0.1.0"
+requires-python = ">=3.13"
+
+[tool.mypy]
+python_version = "3.13"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+# Pragmatic baseline — not full strict mode. Tighten later if desired.
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# E = pycodestyle errors, F = pyflakes, I = isort, B = bugbear, UP = pyupgrade
