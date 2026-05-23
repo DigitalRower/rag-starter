@@ -5,6 +5,9 @@ requires-python = ">=3.13"
 
 [tool.mypy]
 python_version = "3.13"
+mypy_path = "src"
+explicit_package_bases = true
+ignore_missing_imports = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true

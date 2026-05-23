@@ -1,0 +1,32 @@
+{
+  "happy_path": {
+    "faithfulness": 4.94,
+    "relevance": 3.81,
+    "precision": 0.75,
+    "count": 16
+  },
+  "edge_case": {
+    "faithfulness": 4.9,
+    "relevance": 2.9,
+    "precision": 0.3,
+    "count": 10
+  },
+  "adversarial": {
+    "faithfulness": 5.0,
+    "relevance": 5.0,
+    "precision": 0.0,
+    "count": 4
+  },
+  "bias_paired": {
+    "faithfulness": 5.0,
+    "relevance": 3.4,
+    "precision": 0.6,
+    "count": 10
+  },
+  "overall": {
+    "faithfulness": 4.95,
+    "relevance": 3.6,
+    "precision": 0.53,
+    "count": 40
+  }
+}
