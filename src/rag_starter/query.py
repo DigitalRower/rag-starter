@@ -37,6 +37,7 @@ def retrieve_chunks(collection: Collection, q: str, n_results: int = 3) -> list[
 
     return chunks
 
+
 def build_prompt(user_question: str, chunks: list[dict[str, str]]) -> str:
     system_prompt = (
         "You are a helpful assistant answering questions about Anthropic's documentation. "
@@ -49,6 +50,7 @@ def build_prompt(user_question: str, chunks: list[dict[str, str]]) -> str:
         context += f" [{i}] (from {item['source']}): {item['text']}"
     prompt = system_prompt + "\n\n" + context + "\n\nUser question: " + user_question
     return prompt
+
 
 def generate_answer(prompt: str) -> str:
     client = Anthropic()
