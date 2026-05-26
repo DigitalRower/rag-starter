@@ -42,37 +42,28 @@ def run_eval(dataset: list[dict[str, str]], collection: query.Collection) -> lis
 
         # for item in dataset[26:27]:    # use for test to save on tokens; $ python -m evals.runner
         for item in dataset:
-            # call query.main() to get answer + chunks
             generated_result = query.main(collection, item["question"])
-
-            # extract text from chunks
             chunks_text = [c["text"] for c in generated_result["chunks"]]
 
-            # call scorer.score_faithfulness() with question, chunks_text, answer, expected_answer
             faithfulness = score_faithfulness(
                 item["question"],
                 chunks_text,
                 generated_result["answer"],
                 item["expected_answer"],
             )
-
             relevance = score_answer_relevance(
                 item["question"], generated_result["answer"], item["expected_answer"]
             )
-
             precision = score_precision(
                 item["question"], chunks_text, item["expected_answer"]
             )
 
-            # collect the result
             results.append(
                 {
-                    # fields carried over from dataset
                     "id": item["id"],
                     "category": item["category"],
                     "question": item["question"],
                     "expected_answer": item["expected_answer"],
-                    # fields added by the eval run
                     "actual_answer": generated_result["answer"],
                     "faithfulness_score": faithfulness["score"],
                     "faithfulness_reasoning": faithfulness["reasoning"],
@@ -97,15 +88,12 @@ def run_eval(dataset: list[dict[str, str]], collection: query.Collection) -> lis
             }
         )
 
-        # return the collected results
         return results
 
 
 def write_results(results: list[dict], output_path: str | Path) -> None:
     output_path = Path(output_path)
-    # make directory if needed
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    # write JSON (indent=2 keeps it human-readable)
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
 
@@ -114,9 +102,9 @@ def print_summary(results: list[dict]) -> None:
     categories = ["happy_path", "edge_case", "adversarial", "bias_paired"]
     print("\nCategory       Avg Faithfulness    Avg Relevance    Precision@3    Count")
     print("-" * 75)
-    all_faith = []
-    all_relev = []
-    all_prec = []
+    all_faith: list[float] = []
+    all_relev: list[float] = []
+    all_prec: list[float] = []
 
     for cat in categories:
         cat_results = [r for r in results if r["category"] == cat]
@@ -136,8 +124,13 @@ def print_summary(results: list[dict]) -> None:
         print(f"{cat:<20}{faith_avg:<20.2f}{relev_avg:<20.2f}{prec_display:<15}{count}")
 
     print("-" * 75)
+    faith_overall = sum(all_faith) / len(all_faith)
+    relev_overall = sum(all_relev) / len(all_relev)
+    prec_overall = sum(all_prec) / len(all_prec)
+    count_overall = len(all_faith)
     print(
-        f"{'OVERALL':<20}{sum(all_faith) / len(all_faith):<20.2f}{sum(all_relev) / len(all_relev):<20.2f}{sum(all_prec) / len(all_prec):<15.2f}{len(all_faith)}"
+        f"{'OVERALL':<20}{faith_overall:<20.2f}"
+        f"{relev_overall:<20.2f}{prec_overall:<15.2f}{count_overall}"
     )
 
 
@@ -174,7 +167,6 @@ def write_summary(results: list[dict], output_path: str | Path) -> None:
 
 
 if __name__ == "__main__":
-    # logging
     configure_logging()
 
     DATASET_PATH = Path(__file__).parent / "dataset.json"

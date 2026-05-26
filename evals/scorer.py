@@ -31,21 +31,26 @@ def score_precision(
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=256,
-            temperature=0,  # deterministic scoring
+            temperature=0,
             system=(
                 "You are an evaluator. Given the following context, question, and expected answer, "
-                "score whether at least one of the retrieved chunks contains sufficient information "
-                "to answer the question. "
-                "Score 1 if at least one chunk contains information that could answer the question. "
+                "score whether at least one of the retrieved chunks contains sufficient "
+                "information to answer the question. "
+                "Score 1 if at least one chunk contains information that could answer "
+                "the question. "
                 "Score 0 if none of the chunks contain relevant information. "
-                "Sufficient information means the chunks don't need the exact answer word-for-word, "
-                "just enough that a reasonable answer could be generated from them. "
+                "Sufficient information means the chunks don't need the exact answer "
+                "word-for-word, just enough that a reasonable answer could be generated from them. "
                 'Return JSON only: {"score": int, "reasoning": str}'
             ),
             messages=[
                 {
                     "role": "user",
-                    "content": f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer: {expected_answer}",
+                    "content": (
+                        f"Context:\n{context}\n\n"
+                        f"Question: {question}\n\n"
+                        f"Answer: {expected_answer}"
+                    ),
                 }
             ],
         )
@@ -56,14 +61,8 @@ def score_precision(
                 raw = raw[4:]
             raw = raw.strip()
         parsed_result = json.loads(raw)
-        # langfuse: record the parsed dictionary as the span's output
         span.update(output=parsed_result)
-
-        # logging
-        logger.info(
-            f"Scoring complete: scorer_precision score={parsed_result['score']}"
-        )
-
+        logger.info(f"Scoring complete: scorer_precision score={parsed_result['score']}")
         return parsed_result
 
 
@@ -84,15 +83,14 @@ def score_faithfulness(
         },
     ) as span:
         context = "\n\n".join(retrieved_chunks)
-
         client = Anthropic()
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=256,
-            temperature=0,  # deterministic scoring
+            temperature=0,
             system=(
                 "You are an evaluator. Given the following context, question, and answer, "
-                "score the answer for faithfulness on a scale of 1–5. "
+                "score the answer for faithfulness on a scale of 1-5. "
                 "Faithfulness = the answer only uses information present in the provided context. "
                 "Score 5 if fully grounded, 1 if it contains hallucinated facts not in context. "
                 'Return JSON only: {"score": int, "reasoning": str}'
@@ -100,27 +98,25 @@ def score_faithfulness(
             messages=[
                 {
                     "role": "user",
-                    "content": f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer: {generated_answer}",
+                    "content": (
+                        f"Context:\n{context}\n\n"
+                        f"Question: {question}\n\n"
+                        f"Answer: {generated_answer}"
+                    ),
                 }
             ],
         )
-
         raw = response.content[0].text
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
             raw = raw.strip()
-
         parsed_result = json.loads(raw)
-        # langfuse: record the parsed dictionary as the span's output
         span.update(output=parsed_result)
-
-        # logging
         logger.info(
             f"Scoring complete: scorer_faithfulness score={parsed_result['score']}"
         )
-
         return parsed_result
 
 
@@ -142,36 +138,34 @@ def score_answer_relevance(
             max_tokens=256,
             temperature=0,
             system=(
-                "You are an evaluator. Given the following question, generated answer and expected answer, "
-                "score the answer for answer relevance on a scale of 1–5. "
-                "Answer Relevance =  A measure of whether the generated answer actually addresses the question that was asked. "
-                "Score 5 if the answer fully and directly addresses the question, 1 if the answer is off-topic, evasive, or fails to address what was asked. "
+                "You are an evaluator. Given the following question, generated answer "
+                "and expected answer, score the answer for answer relevance on a scale of 1-5. "
+                "Answer Relevance = a measure of whether the generated answer actually "
+                "addresses the question that was asked. "
+                "Score 5 if the answer fully and directly addresses the question, "
+                "1 if the answer is off-topic, evasive, or fails to address what was asked. "
                 'Return JSON only: {"score": int, "reasoning": str}'
             ),
             messages=[
                 {
                     "role": "user",
-                    "content": f"Question: {question}\n\nGenerated Answer: {generated_answer}\n\nExpected Answer: {expected_answer}",
+                    "content": (
+                        f"Question: {question}\n\n"
+                        f"Generated Answer: {generated_answer}\n\n"
+                        f"Expected Answer: {expected_answer}"
+                    ),
                 }
             ],
         )
-
         raw = response.content[0].text
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
             raw = raw.strip()
-
         parsed_result = json.loads(raw)
-        # langfuse: record the parsed dictionary as the span's output
         span.update(output=parsed_result)
-
-        # logging
-        logger.info(
-            f"Scoring complete: scorer_relevance score={parsed_result['score']}"
-        )
-
+        logger.info(f"Scoring complete: scorer_relevance score={parsed_result['score']}")
         return parsed_result
 
 
@@ -193,7 +187,7 @@ if __name__ == "__main__":
         {
             "label": "unfaithful",
             "question": "What are agent skills?",
-            "answer": "Agent skills include neural interfaces and quantum reasoning modules.",  # hallucinated
+            "answer": "Agent skills include neural interfaces and quantum reasoning modules.",
             "expected": "Agent skills are reusable capabilities.",
         },
         {
@@ -204,7 +198,6 @@ if __name__ == "__main__":
         },
     ]
 
-    # langfuse: create a parent trace for the evaluation run
     with langfuse.start_as_current_observation(as_type="span", name="offline_eval_run"):
         for case in cases:
             result = score_faithfulness(
@@ -215,5 +208,4 @@ if __name__ == "__main__":
             )
             print(f"[{case['label']}] score={result['score']} | {result['reasoning']}")
 
-    # langfuse: flush events before the script exits
     langfuse.flush()
