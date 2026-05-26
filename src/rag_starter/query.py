@@ -29,9 +29,7 @@ def get_collection() -> Collection:
     return client.get_collection(name="anthropic_docs")
 
 
-def retrieve_chunks(
-    collection: Collection, q: str, n_results: int = 3
-) -> list[dict[str, str]]:
+def retrieve_chunks(collection: Collection, q: str, n_results: int = 3) -> list[dict[str, str]]:
     with langfuse.start_as_current_observation(
         as_type="span", name="retrieval", input={"query": q, "n_results": n_results}
     ) as span:
@@ -40,7 +38,7 @@ def retrieve_chunks(
         metas = cast(list[list[dict[str, str]]], results["metadatas"])[0]
 
         chunks = []
-        for doc, meta in zip(docs, metas):
+        for doc, meta in zip(docs, metas, strict=False):
             chunks.append({"text": doc, "source": meta.get("source", "unknown")})
 
         # langfuse: return output and end the span

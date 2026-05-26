@@ -47,9 +47,7 @@ def score_precision(
                 {
                     "role": "user",
                     "content": (
-                        f"Context:\n{context}\n\n"
-                        f"Question: {question}\n\n"
-                        f"Answer: {expected_answer}"
+                        f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer: {expected_answer}"
                     ),
                 }
             ],
@@ -99,9 +97,7 @@ def score_faithfulness(
                 {
                     "role": "user",
                     "content": (
-                        f"Context:\n{context}\n\n"
-                        f"Question: {question}\n\n"
-                        f"Answer: {generated_answer}"
+                        f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer: {generated_answer}"
                     ),
                 }
             ],
@@ -114,9 +110,7 @@ def score_faithfulness(
             raw = raw.strip()
         parsed_result = json.loads(raw)
         span.update(output=parsed_result)
-        logger.info(
-            f"Scoring complete: scorer_faithfulness score={parsed_result['score']}"
-        )
+        logger.info(f"Scoring complete: scorer_faithfulness score={parsed_result['score']}")
         return parsed_result
 
 

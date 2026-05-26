@@ -54,9 +54,7 @@ def run_eval(dataset: list[dict[str, str]], collection: query.Collection) -> lis
             relevance = score_answer_relevance(
                 item["question"], generated_result["answer"], item["expected_answer"]
             )
-            precision = score_precision(
-                item["question"], chunks_text, item["expected_answer"]
-            )
+            precision = score_precision(item["question"], chunks_text, item["expected_answer"])
 
             results.append(
                 {
