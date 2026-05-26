@@ -50,7 +50,9 @@ def ingest_documents() -> None:
 
             # Chroma's add() method stores the chunk
             collection.add(
-                ids=[str(chunk_id)], documents=[chunk_text_content], metadatas=[chunk_metadata]
+                ids=[str(chunk_id)],
+                documents=[chunk_text_content],
+                metadatas=[chunk_metadata],
             )
 
             print(f"Added chunk {chunk_id} from {source}")
