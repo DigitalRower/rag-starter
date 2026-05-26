@@ -1,9 +1,30 @@
 import json
+import logging
+import sys
 from pathlib import Path
 from typing import cast
 
+from dotenv import load_dotenv
+from langfuse import get_client
+
 from evals.scorer import score_answer_relevance, score_faithfulness, score_precision
 from rag_starter import query
+
+load_dotenv()
+
+# langfuse: initialize langfuse client
+langfuse = get_client()
+
+# logging
+logger = logging.getLogger(__name__)
+
+
+def configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        stream=sys.stdout,
+    )
 
 
 def load_dataset(path: Path) -> list[dict[str, str]]:
@@ -11,66 +32,77 @@ def load_dataset(path: Path) -> list[dict[str, str]]:
         dataset = cast(list[dict[str, str]], json.load(f))
     return dataset
 
+
 # returns ("faithfullness": 0.87, "answer_relevance": 0.82, ...)
-def run_eval(
-    dataset: list[dict[str, str]],
-    collection: query.Collection
-    ) -> list[dict]:
+def run_eval(dataset: list[dict[str, str]], collection: query.Collection) -> list[dict]:
+    with langfuse.start_as_current_observation(
+        as_type="span", name="eval_run", input={"dataset_size": len(dataset)}
+    ) as span:
+        results = []
 
-    results = []
-    
-    #for item in dataset[26:27]:    # use for test to save on tokens
-    for item in dataset:
-        # call query.main() to get answer + chunks
-        generated_result = query.main(collection, item["question"])
+        # for item in dataset[26:27]:    # use for test to save on tokens; $ python -m evals.runner
+        for item in dataset:
+            generated_result = query.main(collection, item["question"])
+            chunks_text = [c["text"] for c in generated_result["chunks"]]
 
-        # extract text from chunks
-        chunks_text = [c["text"] for c in generated_result["chunks"]]
+            faithfulness = score_faithfulness(
+                item["question"],
+                chunks_text,
+                generated_result["answer"],
+                item["expected_answer"],
+            )
+            relevance = score_answer_relevance(
+                item["question"], generated_result["answer"], item["expected_answer"]
+            )
+            precision = score_precision(item["question"], chunks_text, item["expected_answer"])
 
-        # call scorer.score_faithfulness() with question, chunks_text, answer, expected_answer
-        faithfulness = score_faithfulness(item["question"], chunks_text, generated_result["answer"], item["expected_answer"])
+            results.append(
+                {
+                    "id": item["id"],
+                    "category": item["category"],
+                    "question": item["question"],
+                    "expected_answer": item["expected_answer"],
+                    "actual_answer": generated_result["answer"],
+                    "faithfulness_score": faithfulness["score"],
+                    "faithfulness_reasoning": faithfulness["reasoning"],
+                    "relevance_score": relevance["score"],
+                    "relevance_reasoning": relevance["reasoning"],
+                    "precision_score": precision["score"],
+                    "precision_reasoning": precision["reasoning"],
+                    "sources": generated_result["sources"],
+                }
+            )
 
-        relevance = score_answer_relevance(item["question"], generated_result["answer"], item["expected_answer"])
+        # langfuse: record the final output to the trace
+        all_faith = [r["faithfulness_score"] for r in results]
+        all_relev = [r["relevance_score"] for r in results]
+        all_prec = [r["precision_score"] for r in results]
+        span.update(
+            output={
+                "dataset_size": len(results),
+                "overall_faithfulness": round(sum(all_faith) / len(all_faith), 2),
+                "overall_relevance": round(sum(all_relev) / len(all_relev), 2),
+                "overall_precision": round(sum(all_prec) / len(all_prec), 2),
+            }
+        )
 
-        precision = score_precision(item["question"], chunks_text, item["expected_answer"])
-
-        # collect the result
-        results.append({
-            # fields carried over from dataset
-            "id": item["id"],
-            "category": item["category"],
-            "question": item["question"],
-            "expected_answer": item["expected_answer"],
-            # fields added by the eval run
-            "actual_answer": generated_result["answer"],
-            "faithfulness_score": faithfulness["score"],
-            "faithfulness_reasoning": faithfulness["reasoning"],
-            "relevance_score": relevance["score"],
-            "relevance_reasoning": relevance["reasoning"],
-            "precision_score": precision["score"],
-            "precision_reasoning": precision["reasoning"],
-            "sources": generated_result["sources"]
-        })     
-
-    # return the collected results
-    return results
+        return results
 
 
 def write_results(results: list[dict], output_path: str | Path) -> None:
     output_path = Path(output_path)
-    # make directory if needed
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    # write JSON (indent=2 keeps it human-readable)
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
+
 
 def print_summary(results: list[dict]) -> None:
     categories = ["happy_path", "edge_case", "adversarial", "bias_paired"]
     print("\nCategory       Avg Faithfulness    Avg Relevance    Precision@3    Count")
     print("-" * 75)
-    all_faith = []
-    all_relev = []
-    all_prec = []
+    all_faith: list[float] = []
+    all_relev: list[float] = []
+    all_prec: list[float] = []
 
     for cat in categories:
         cat_results = [r for r in results if r["category"] == cat]
@@ -79,7 +111,7 @@ def print_summary(results: list[dict]) -> None:
             continue
         faith_scores = [r["faithfulness_score"] for r in cat_results]
         relev_scores = [r["relevance_score"] for r in cat_results]
-        prec_scores = [r["precision_score"] for r in cat_results] 
+        prec_scores = [r["precision_score"] for r in cat_results]
         faith_avg = sum(faith_scores) / count
         relev_avg = sum(relev_scores) / count
         prec_avg = sum(prec_scores) / len(prec_scores) if prec_scores else None
@@ -90,7 +122,15 @@ def print_summary(results: list[dict]) -> None:
         print(f"{cat:<20}{faith_avg:<20.2f}{relev_avg:<20.2f}{prec_display:<15}{count}")
 
     print("-" * 75)
-    print(f"{'OVERALL':<20}{sum(all_faith)/len(all_faith):<20.2f}{sum(all_relev)/len(all_relev):<20.2f}{sum(all_prec)/len(all_prec):<15.2f}{len(all_faith)}")
+    faith_overall = sum(all_faith) / len(all_faith)
+    relev_overall = sum(all_relev) / len(all_relev)
+    prec_overall = sum(all_prec) / len(all_prec)
+    count_overall = len(all_faith)
+    print(
+        f"{'OVERALL':<20}{faith_overall:<20.2f}"
+        f"{relev_overall:<20.2f}{prec_overall:<15.2f}{count_overall}"
+    )
+
 
 def write_summary(results: list[dict], output_path: str | Path) -> None:
     output_path = Path(output_path)
@@ -123,7 +163,10 @@ def write_summary(results: list[dict], output_path: str | Path) -> None:
     with open(output_path, "w") as f:
         json.dump(summary, f, indent=2)
 
+
 if __name__ == "__main__":
+    configure_logging()
+
     DATASET_PATH = Path(__file__).parent / "dataset.json"
     dataset = load_dataset(DATASET_PATH)
     collection = query.get_collection()
@@ -133,3 +176,6 @@ if __name__ == "__main__":
     write_results(graded, RESULTS_PATH)
     write_summary(graded, SUMMARY_PATH)
     print_summary(graded)
+
+    # langfuse: flush events before the script exits
+    langfuse.flush()
