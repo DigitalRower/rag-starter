@@ -1,8 +1,10 @@
 import json
 import logging
 import sys
+from typing import cast
 
 from anthropic import Anthropic
+from anthropic.types import TextBlock
 from dotenv import load_dotenv
 from langfuse import get_client
 
@@ -52,13 +54,14 @@ def score_precision(
                 }
             ],
         )
-        raw = response.content[0].text
+        block = response.content[0]
+        raw = block.text if isinstance(block, TextBlock) else "" 
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
             raw = raw.strip()
-        parsed_result = json.loads(raw)
+        parsed_result = cast(dict[str, int | str], json.loads(raw))
         span.update(output=parsed_result)
         logger.info(f"Scoring complete: scorer_precision score={parsed_result['score']}")
         return parsed_result
@@ -102,13 +105,14 @@ def score_faithfulness(
                 }
             ],
         )
-        raw = response.content[0].text
+        block = response.content[0]
+        raw = block.text if isinstance(block, TextBlock) else "" 
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
             raw = raw.strip()
-        parsed_result = json.loads(raw)
+        parsed_result = cast(dict[str, int | str], json.loads(raw))
         span.update(output=parsed_result)
         logger.info(f"Scoring complete: scorer_faithfulness score={parsed_result['score']}")
         return parsed_result
@@ -151,13 +155,14 @@ def score_answer_relevance(
                 }
             ],
         )
-        raw = response.content[0].text
+        block = response.content[0]
+        raw = block.text if isinstance(block, TextBlock) else "" 
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
             raw = raw.strip()
-        parsed_result = json.loads(raw)
+        parsed_result = cast(dict[str, int | str], json.loads(raw))
         span.update(output=parsed_result)
         logger.info(f"Scoring complete: scorer_relevance score={parsed_result['score']}")
         return parsed_result

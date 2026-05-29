@@ -1,4 +1,4 @@
-# rag-starter — RAG Pipeline for Semantic Search and Grounded Generation
+# rag-starter: RAG Pipeline for Semantic Search and Grounded Generation
 
 A production-ready RAG (Retrieval-Augmented Generation) pipeline that ingests documents, embeds them into a vector database, retrieves semantically relevant chunks for a user query, and generates grounded answers using Claude. Built with Chroma, Anthropic, and Python.
 
@@ -25,7 +25,7 @@ A user query flows through four stages:
 
 **Document ingestion and chunking:** Raw markdown files are loaded from `./data/`, split into chunks (default: 500 tokens with 50-token overlap using recursive chunking), and prepared for embedding. Chunking strategy balances retrieval granularity (smaller chunks = more precise results) against context preservation (larger chunks = more surrounding context per result).
 
-**Embedding and storage:** Each chunk is embedded using Chroma's default sentence-transformer model (all-MiniLM-L6-v2, runs locally — zero API cost). Embeddings are stored in a persistent Chroma collection at `./chroma_db/` alongside metadata (source file, chunk index). The persistent collection survives between runs and can be queried without re-ingesting.
+**Embedding and storage:** Each chunk is embedded using Chroma's default sentence-transformer model (all-MiniLM-L6-v2, runs locally, zero API cost). Embeddings are stored in a persistent Chroma collection at `./chroma_db/` alongside metadata (source file, chunk index). The persistent collection survives between runs and can be queried without re-ingesting.
 
 **Retrieval:** When a user asks a question, the question is embedded using the same model and used as a query vector against the stored embeddings. Chroma returns the top-K most similar chunks (default: 3) ranked by cosine similarity. This semantic search retrieves relevant context even if keywords don't match exactly.
 
@@ -35,7 +35,7 @@ A user query flows through four stages:
 
 ## Architecture: RAG vs long-context
 
-This implementation uses chunked retrieval (RAG) — splitting the corpus into pieces, embedding each, and selectively retrieving only the relevant chunks for each query.
+This implementation uses chunked retrieval (RAG): splitting the corpus into pieces, embedding each, and selectively retrieving only the relevant chunks for each query.
 
 **Why RAG for rag-starter?**
 - Works with corpora larger than a single LLM context window
@@ -57,12 +57,12 @@ For production, measure against your actual usage patterns before committing to 
 
 ## Limitations
 
-- Embedding quality depends on the corpus — retrieval is only as good as the embeddings. For domain-specific jargon (medical, legal, technical), consider fine-tuned or domain-specific embedding models in production.
-- Chunk size and overlap are fixed — no adaptive chunking based on document structure
-- No query expansion or reranking — retrieved chunks are returned in embedding similarity order without additional refinement
-- Retrieval is the primary weakness — precision@3 scores 0.30 on edge cases and 0.00 on adversarial queries. Generation is grounded when chunks are found (faithfulness 4.95/5.00 overall), but the pipeline does not reliably retrieve the right chunks for ambiguous or adversarial inputs. Retrieval quality will be the focus of improvement in W9–W12.
-- Persistent collection stored locally — not suitable for multi-user or distributed scenarios without additional infrastructure
-- **Prompt caching not yet implemented** — Anthropic prompt caching will be
+- Embedding quality depends on the corpus. Retrieval is only as good as the embeddings. For domain-specific jargon (medical, legal, technical), consider fine-tuned or domain-specific embedding models in production.
+- Chunk size and overlap are fixed, with no adaptive chunking based on document structure
+- No query expansion or reranking. Retrieved chunks are returned in embedding similarity order without additional refinement
+- Retrieval is the primary weakness. Precision@3 scores 0.30 on edge cases and 0.00 on adversarial queries. Generation is grounded when chunks are found (faithfulness 4.95/5.00 overall), but the pipeline does not reliably retrieve the right chunks for ambiguous or adversarial inputs. Retrieval quality will be the focus of improvement in W9–W12.
+- Persistent collection stored locally, not suitable for multi-user or distributed scenarios without additional infrastructure
+- **Prompt caching not yet implemented.** Anthropic prompt caching will be
   applied at production hardening (W13) once a token-cost baseline is established.
 
 
@@ -90,9 +90,9 @@ Automated eval harness built in W5E using LLM-as-judge scoring (Claude Haiku, te
 
 ### Interpretation
 
-Generation is strong — faithfulness is near-perfect across all categories (4.95/5.00), meaning Claude does not hallucinate when chunks are retrieved. The weakness is retrieval: precision@3 drops to 0.30 on edge cases and 0.00 on adversarial queries, which directly explains the lower relevance scores in those categories. When the right chunks aren't retrieved, no generation quality can compensate.
+Generation is strong: faithfulness is near-perfect across all categories (4.95/5.00), meaning Claude does not hallucinate when chunks are retrieved. The weakness is retrieval: precision@3 drops to 0.30 on edge cases and 0.00 on adversarial queries, which directly explains the lower relevance scores in those categories. When the right chunks aren't retrieved, no generation quality can compensate.
 
-The adversarial category (precision@3=0.00, relevance=5.00) shows an interesting pattern: the four adversarial cases scored perfectly on relevance because the system correctly returned "I don't know based on the provided context" — the grounding constraint worked as intended, but no chunks were retrieved.
+The adversarial category (precision@3=0.00, relevance=5.00) shows an interesting pattern: the four adversarial cases scored perfectly on relevance because the system correctly returned "I don't know based on the provided context", the grounding constraint worked as intended, but no chunks were retrieved.
 
 The gap to close in W9–W12 is retrieval quality, not generation quality.
 
@@ -100,7 +100,43 @@ The gap to close in W9–W12 is retrieval quality, not generation quality.
 
 5 paired test cases were added to the eval dataset (`bias_paired` category) where the same factual question was phrased with different demographic or organizational framing (e.g., US vs. EU context, personal hobby vs. commercial production). Faithfulness=5.00 and precision@3=0.60 were consistent across all 10 cases.
 
-Minor relevance variation was observed on 2 of 5 pairs: pair 032 (US vs. EU framing) scored 5 vs. 4 relevance, and pair 033 (personal hobby vs. commercial production) scored 5 vs. 4 relevance. The remaining 3 pairs showed no variation. The likely cause is corpus coverage — EU regulatory and production deployment content is underrepresented in the corpus relative to US and hobby-project content. No model bias was identified; the variation tracks directly to what the corpus contains.
+Minor relevance variation was observed on 2 of 5 pairs: pair 032 (US vs. EU framing) scored 5 vs. 4 relevance, and pair 033 (personal hobby vs. commercial production) scored 5 vs. 4 relevance. The remaining 3 pairs showed no variation. The likely cause is corpus coverage, EU regulatory and production deployment content is underrepresented in the corpus relative to US and hobby-project content. No model bias was identified; the variation tracks directly to what the corpus contains.
+
+---
+
+## Observability (W6E)
+
+Every query and every eval run is traced end to end with [Langfuse](https://langfuse.com/). Instrumentation uses the Langfuse Python SDK (v3) context-manager pattern, so latency is timed automatically per span and cost is computed from the model name plus token usage passed on each generation.
+
+### What gets traced
+
+Each eval item produces a single trace named `eval_item`, with everything nested underneath it:
+
+    eval_item                     (per-item root span: question in, scores out)
+    ├── main_rag_query            (the RAG query)
+    │   ├── retrieval             (Chroma similarity search)
+    │   └── generation            (Claude grounded answer, token usage + cost)
+    ├── scorer_faithfulness       (LLM-as-judge)
+    ├── scorer_relevance          (LLM-as-judge)
+    └── scorer_precision          (LLM-as-judge)
+
+The three eval metrics are emitted as Langfuse score objects attached to the item's trace, not just logged as span output, so they populate the Scores panel and Scores Analytics. Each metric is backed by a Score Config (faithfulness and relevance NUMERIC 1-5, precision NUMERIC 0-1) for range validation and distribution charts. All items from one eval run share a `session_id` and an `eval` tag, so a run appears as a single Session containing many traces.
+
+In production (serving a real user query) only `main_rag_query` runs, with no scorer spans, so live traffic stays a clean one-trace-per-query. The scorer spans appear only during eval runs.
+
+### What the dashboard shows
+
+A full 40-item eval run looped to 120 items produced 120 `eval_item` traces, 840 observations, 360 score objects (120 each of faithfulness, relevance, precision), and total cost tracked per model ($0.22 for the run).
+
+![Langfuse dashboard: trace count, model cost, score averages, observations, and model usage for a full eval run](./assets/langfuse-dashboard-overview.png)
+
+Latency is captured per span at p50/p90/p95/p99, broken out by trace, generation, and observation. The observation table makes the nested structure visible: the `eval_item` trace spans the full per-item duration (p50 7.7s) while the individual `main_rag_query`, `generation`, and scorer spans each report their own latency.
+
+![Langfuse latency percentiles by trace, generation, and observation, plus per-generation model latency over time](./assets/langfuse-latency-percentiles.png)
+
+### Why Langfuse
+
+Langfuse is open source and self-hostable, with a free Cloud tier that covers a project at this scale at no cost. Tracing, score emission, and dashboards all work the same whether running against Langfuse Cloud or a self-hosted instance, so the same instrumentation carries forward to later projects without rework.
 
 ---
 
@@ -150,7 +186,7 @@ This will:
 3. Embed and store in `./chroma_db/`
 4. Print a summary: "Ingested X chunks from Y documents"
 
-The collection is persistent — run this once, then query as many times as you want without re-ingesting.
+The collection is persistent. Run this once, then query as many times as you want without re-ingesting.
 
 ---
 
@@ -177,7 +213,7 @@ The collection is persistent — run this once, then query as many times as you 
 
 For testing grounding, try:
 - A query answerable from your corpus (verify Claude cites sources)
-- A query NOT in your corpus (verify Claude says "I don't know" — no hallucination)
+- A query NOT in your corpus (verify Claude says "I don't know", no hallucination)
 - An ambiguous query (verify Claude acknowledges ambiguity and uses context)
 
 ---
@@ -186,8 +222,8 @@ For testing grounding, try:
 
 Type checking and linting run automatically in CI on every push via GitHub Actions.
 
-- **mypy** — enforces type hints on all function signatures and return types. Config in `pyproject.toml` under `[tool.mypy]`. A failing mypy check blocks merge to `main`.
-- **ruff** — lint and format checks. Config in `pyproject.toml` under `[tool.ruff]`. Enforces import order, line length, and common bug patterns. A failing ruff check blocks merge to `main`.
+- **mypy**: enforces type hints on all function signatures and return types. Config in `pyproject.toml` under `[tool.mypy]`. A failing mypy check blocks merge to `main`.
+- **ruff**: lint and format checks. Config in `pyproject.toml` under `[tool.ruff]`. Enforces import order, line length, and common bug patterns. A failing ruff check blocks merge to `main`.
 
 To run locally before pushing:
 
@@ -221,13 +257,15 @@ Dependencies are listed in `requirements.txt`. See [Tech stack](#tech-stack) bel
     │   └── rag_starter/
     │       ├── __init__.py
     │       ├── ingest.py         # Load, chunk, embed, store
-    │       └── query.py          # Retrieve, generate, return grounded answer
+    │       └── query.py          # Retrieve, generate, return grounded answer (Langfuse traced)
     ├── evals/
     │   ├── dataset.json          # 40 golden Q/A pairs (happy_path, edge_case, adversarial, bias_paired)
     │   ├── scorer.py             # LLM-as-judge scoring logic
-    │   ├── runner.py             # Orchestrates full eval run
+    │   ├── runner.py             # Orchestrates eval run; per-item tracing + score emission
     │   └── results/
-    │       └── results.json      # Eval run output
+    │       ├── results.json      # Per-item eval output
+    │       └── summary.json      # Per-category and overall averages
+    ├── assets/                   # README screenshots (Langfuse dashboard, latency)
     ├── tests/
     ├── data/                     # Source documents (markdown/text) 
     ├── chroma_db/                # Persistent vector database (gitignored)
@@ -330,10 +368,10 @@ Common issues and solutions:
 
 ## Tech stack
 
-- [Chroma](https://docs.trychroma.com/) — Vector database (local persistence)
-- [Anthropic Python SDK](https://github.com/anthropics/anthropic-sdk-python) — Claude API client
-- [sentence-transformers](https://www.sbert.net/) — Embedding model (runs locally via Chroma)
-- [python-dotenv](https://github.com/theskumar/python-dotenv) — Environment variable management
+- [Chroma](https://docs.trychroma.com/): Vector database (local persistence)
+- [Anthropic Python SDK](https://github.com/anthropics/anthropic-sdk-python): Claude API client
+- [sentence-transformers](https://www.sbert.net/): Embedding model (runs locally via Chroma)
+- [python-dotenv](https://github.com/theskumar/python-dotenv): Environment variable management
 
 ---
 
@@ -341,19 +379,19 @@ Common issues and solutions:
 
 Use these scenarios to verify grounding behavior manually, or as a sanity check after modifying the pipeline:
 
-**Test 1 — Answerable query:**
+**Test 1, answerable query:**
 
     python -m src.query "What are agent skills?"
 
 Expected: Claude answers confidently and cites source chunks.
 
-**Test 2 — Unanswerable query:**
+**Test 2, unanswerable query:**
 
     python -m src.query "what is the capital of mars"
 
 Expected: Claude says "I don't know based on the provided context" (no hallucination).
 
-**Test 3 — Before/after comparison:**
+**Test 3, before/after comparison:**
 
 Run the same query through `src/query.py` (with retrieval) and compare to Claude's answer without retrieval (just the system prompt and question, no context). 
 - Does retrieval change the answer?
@@ -364,10 +402,11 @@ Run the same query through `src/query.py` (with retrieval) and compare to Claude
 
 ## Next steps
 
-- **W6E (in progress):** Langfuse observability — structured logging, request tracing, cost tracking, and latency monitoring (p50/p95)
-- **W9:** Adapt ingestion and retrieval logic for Project 1 (Docs Copilot) — same architecture, different corpus. Retrieval quality (precision@3) is the primary gap to address at this stage.
-- **W13:** Add prompt caching to reduce redundant token cost on repeated queries
-- **W28+:** Benchmark against OpenAI's long-context APIs to decide when RAG is overkill
+- **W6E (done):** Langfuse observability. Per-query tracing with nested retrieval, generation, and scorer spans; cost and latency capture; eval scores emitted as score objects and grouped by session. See the Observability section above.
+- **W7E:** Migrate the eval harness to Langfuse Datasets and Experiments for run-over-run regression comparison in the UI.
+- **W9:** Adapt ingestion and retrieval logic for Project 1 (Docs Copilot), same architecture, different corpus. Retrieval quality (precision@3) is the primary gap to address at this stage.
+- **W13:** Add prompt caching to reduce redundant token cost on repeated queries.
+- **W28+:** Benchmark against OpenAI's long-context APIs to decide when RAG is overkill.
 
 ---
 

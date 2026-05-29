@@ -1,11 +1,12 @@
 import json
 import logging
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
 from dotenv import load_dotenv
-from langfuse import get_client
+from langfuse import get_client, propagate_attributes
 
 from evals.scorer import score_answer_relevance, score_faithfulness, score_precision
 from rag_starter import query
@@ -33,15 +34,23 @@ def load_dataset(path: Path) -> list[dict[str, str]]:
     return dataset
 
 
-# returns ("faithfullness": 0.87, "answer_relevance": 0.82, ...)
 def run_eval(dataset: list[dict[str, str]], collection: query.Collection) -> list[dict]:
-    with langfuse.start_as_current_observation(
-        as_type="span", name="eval_run", input={"dataset_size": len(dataset)}
-    ) as span:
-        results = []
-
-        # for item in dataset[26:27]:    # use for test to save on tokens; $ python -m evals.runner
-        for item in dataset:
+    run_id = f"eval-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+    results = []
+    #for item in dataset[26:27]:    # use for test to save on tokens; $ python -m evals.runner
+    for item in dataset:
+        with (
+            propagate_attributes(session_id=run_id, tags=["eval", item["category"]]),
+            langfuse.start_as_current_observation(
+                as_type="span",
+                name="eval_item",
+                input={
+                    "id": item["id"],
+                    "category": item["category"],
+                    "question": item["question"],
+                },
+            ) as item_span,
+        ):
             generated_result = query.main(collection, item["question"])
             chunks_text = [c["text"] for c in generated_result["chunks"]]
 
@@ -55,6 +64,38 @@ def run_eval(dataset: list[dict[str, str]], collection: query.Collection) -> lis
                 item["question"], generated_result["answer"], item["expected_answer"]
             )
             precision = score_precision(item["question"], chunks_text, item["expected_answer"])
+
+            # langfuse: emit one score object per metric, attached to this item's trace
+            trace_id = generated_result["trace_id"]
+            langfuse.create_score(
+                trace_id=trace_id,
+                name="faithfulness",
+                value=int(faithfulness["score"]),
+                data_type="NUMERIC",
+                comment=str(faithfulness["reasoning"]),
+            )
+            langfuse.create_score(
+                trace_id=trace_id,
+                name="relevance",
+                value=int(relevance["score"]),
+                data_type="NUMERIC",
+                comment=str(relevance["reasoning"]),
+            )
+            langfuse.create_score(
+                trace_id=trace_id,
+                name="precision",
+                value=int(precision["score"]),
+                data_type="NUMERIC",
+                comment=str(precision["reasoning"]),
+            )
+
+            item_span.update(
+                output={
+                    "faithfulness": int(faithfulness["score"]),
+                    "relevance": int(relevance["score"]),
+                    "precision": int(precision["score"]),
+                }
+            )
 
             results.append(
                 {
@@ -73,20 +114,7 @@ def run_eval(dataset: list[dict[str, str]], collection: query.Collection) -> lis
                 }
             )
 
-        # langfuse: record the final output to the trace
-        all_faith = [r["faithfulness_score"] for r in results]
-        all_relev = [r["relevance_score"] for r in results]
-        all_prec = [r["precision_score"] for r in results]
-        span.update(
-            output={
-                "dataset_size": len(results),
-                "overall_faithfulness": round(sum(all_faith) / len(all_faith), 2),
-                "overall_relevance": round(sum(all_relev) / len(all_relev), 2),
-                "overall_precision": round(sum(all_prec) / len(all_prec), 2),
-            }
-        )
-
-        return results
+    return results
 
 
 def write_results(results: list[dict], output_path: str | Path) -> None:
