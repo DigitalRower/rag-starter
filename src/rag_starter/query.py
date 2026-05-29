@@ -119,7 +119,7 @@ def generate_answer(prompt: str) -> str:
 
 
 def main(
-    collection: Collection, 
+    collection: Collection,
     user_question: str,
     session_id: str | None = None,
     tags: list[str] | None = None,
@@ -144,7 +144,6 @@ def main(
             prompt = build_prompt(user_question, chunks)
             answer = generate_answer(prompt)
 
-
         sources: list[str] = list(dict.fromkeys([item["source"] for item in chunks]))
         response: QueryResponse = {
             "answer": answer,
@@ -156,6 +155,7 @@ def main(
         span.update(output=response)
 
     return response
+
 
 if __name__ == "__main__":
     logging.basicConfig(
