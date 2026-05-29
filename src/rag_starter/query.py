@@ -7,7 +7,7 @@ from anthropic import Anthropic, APIError
 from anthropic.types import TextBlock
 from chromadb import Collection
 from dotenv import load_dotenv
-from langfuse import get_client
+from langfuse import get_client, propagate_attributes
 
 load_dotenv()
 
@@ -22,6 +22,7 @@ class QueryResponse(TypedDict):
     answer: str
     sources: list[str]
     chunks: list[dict[str, str]]
+    trace_id: str
 
 
 def get_collection() -> Collection:
@@ -117,19 +118,39 @@ def generate_answer(prompt: str) -> str:
             return error_msg
 
 
-def main(collection: Collection, user_question: str) -> QueryResponse:
+def main(
+    collection: Collection,
+    user_question: str,
+    session_id: str | None = None,
+    tags: list[str] | None = None,
+) -> QueryResponse:
     # log: INFO when a query is received (start of the request)
     logger.info(f"Query received: '{user_question}'")
 
     with langfuse.start_as_current_observation(
         as_type="span", name="main_rag_query", input={"user_question": user_question}
     ) as span:
-        chunks = retrieve_chunks(collection, user_question)
-        prompt = build_prompt(user_question, chunks)
-        answer = generate_answer(prompt)
+        # langfuse: cpature the trace id
+        trace_id = langfuse.get_current_trace_id()
+        assert trace_id is not None, "trace_id should never be None inside an active span"
+
+        if session_id or tags:
+            with propagate_attributes(session_id=session_id, tags=tags or []):
+                chunks = retrieve_chunks(collection, user_question)
+                prompt = build_prompt(user_question, chunks)
+                answer = generate_answer(prompt)
+        else:
+            chunks = retrieve_chunks(collection, user_question)
+            prompt = build_prompt(user_question, chunks)
+            answer = generate_answer(prompt)
 
         sources: list[str] = list(dict.fromkeys([item["source"] for item in chunks]))
-        response: QueryResponse = {"answer": answer, "sources": sources, "chunks": chunks}
+        response: QueryResponse = {
+            "answer": answer,
+            "sources": sources,
+            "chunks": chunks,
+            "trace_id": trace_id,
+        }
 
         span.update(output=response)
 
